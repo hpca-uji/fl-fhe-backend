@@ -1,0 +1,46 @@
+services:
+  federated-server:
+    container_name: federated-server
+    image: uji/federated-server:v1.0.0
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    ports:
+      - "9091:9091"
+      - "9092:9092"
+      - "9093:9093"
+    volumes:
+      - .:/app
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["flower-superlink", "--insecure"]
+    networks:
+      - federated-network
+
+  federated-client:
+    container_name: federated-client
+    image: uji/federated-client:v1.0.0
+    build:
+      context: .
+      dockerfile: docker/client/Dockerfile
+    ports:
+      - "9094:9094"
+    volumes:
+      - .:/app_client
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    command:
+      [
+        "flower-supernode",
+        "--insecure",
+        "--superlink federated-server:9092",
+        '--node-config "partition-id=1 num-partitions=3"',
+      ]
+    networks:
+      - federated-network
+
+networks:
+  federated-network:
+    external: true

@@ -1,0 +1,105 @@
+# Flower configuration
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "CIBER_CAFE"
+version = "1.0.0"
+description = "Federated Learning and Homomorphic Encryption"
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]>=1.15.1",
+    "flwr-datasets[vision]>=0.5.0",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "wandb==0.17.8",
+    "tomli>=2.0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.flwr.app]
+publisher = "UJI"
+
+[tool.flwr.app.components]
+serverapp = "server:app"
+clientapp = "client:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 2
+fraction-fit = 1
+fraction-evaluate = 0.5
+local-epochs = 1
+server-device = "cpu" # "cpu", "mps", "cuda" => mps mac M1
+use-wandb = false
+min-fit-clients = 2
+min-evaluate-clients = 2
+min-available-clients = 2
+number-clients = 2
+
+[tool.flwr.federations]
+default = "local-sim"
+
+[tool.flwr.federations.local-sim]
+options.num-supernodes = 10
+options.backend.client-resources.num-cpus = 2 # each ClientApp assumes to use 2CPUs
+options.backend.client-resources.num-gpus = 0.0 # ratio of VRAM a ClientApp has access to
+
+[tool.flwr.federations.local-sim-gpu]
+options.num-supernodes = 10
+options.backend.client-resources.num-cpus = 5
+options.backend.client-resources.num-gpus = 0.25
+
+[tool.flwr.federations.local-deployment]
+address = "127.0.0.1:9093"
+insecure = true
+
+# Move custom sections under tool namespace
+[tool.federated_learning.nn]
+store-model = true # BEST-ONLY y ALL
+seed = 0
+max-epochs = 1
+batch-size = 32
+learning-rate = 0.001
+storage-model-path = './storage/models/'
+model-save = './storage/models/model.pkl'
+checkpoint-save = './storage/models/checkpoint.pkl'
+
+[tool.federated_learning.quantum]
+enable = false
+num-qubits = 6
+num-layers = 6
+
+[tool.federated_learning.he]
+enable = true
+context.path.client = './storage/he/context/client.pkl'
+context.path.server = './storage/he/context/server.pkl'
+key.path.client = './storage/he/keystore/public.key'
+key.path.server = './storage/he/keystore/private.key'
+key.path.server-crypted = './storage/he/keystore/server-crypted.key'
+library = 'TENSEAL' # Supported TENSEAL, PYFHEL, OPENFHE
+schema = 'CKKS' # Supported CKKS, BGV, FGV
+poly-modulus-degree = 8192
+global-scale = 1099511627776
+coeff-mod-bit-sizes = [60, 40, 40, 60]
+
+[tool.federated_learning.stats]
+enable = true
+path.plots = './storage/stats/plots/'
+path.reports = './storage/stats/reports'
+
+[tool.federated_learning.test.dataset]
+dataset = 'CIFAR' # Supported MNIST, CIFAR
+splitter = 0.2
+num-clients = 10
+num-workers = 2
+batch-size = 32
+resize = 32
+seed = 0
+data-path = './storage/data/'
+validation-data = false
+normalization.mean = [0.5, 0.5, 0.5]
+normalization.std = [0.5, 0.5, 0.5]
+classes = ['plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']

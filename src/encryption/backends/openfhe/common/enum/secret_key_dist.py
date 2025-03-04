@@ -1,0 +1,6 @@
+from openfhe import *
+
+class SecretKeyDist:
+  UNIFORM_TERNARY = "UNIFORM_TERNARY"
+  SPARSE_TERNARY = "SPARSE_TERNARY"
+  GAUSSIAN = "GAUSSIAN"
