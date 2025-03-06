@@ -59,3 +59,10 @@ To add more clients to the **SuperNode**
 ```
 flwr-clientapp --clientappio-api-address 127.0.0.1:<supernode-port> --insecure
 ```
+
+### Run the simulation
+
+```
+flwr run
+```
+

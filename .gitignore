@@ -2,4 +2,7 @@ env
 ./env
 storage
 ./storage
-__pycache__/
+__pycache__
+.DS_Store
+.vscode
+./__pycache__
