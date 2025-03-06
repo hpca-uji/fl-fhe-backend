@@ -4,6 +4,9 @@ FROM python:3.10-slim
 WORKDIR /app
 # Install system dependencies using apt
 RUN apt-get update && apt-get install -y \
+  autoconf \
+  clang \
+  libmop5 \
   libomp-dev \
   build-essential \
   libssl-dev \

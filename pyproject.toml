@@ -8,14 +8,7 @@ name = "CIBER_CAFE"
 version = "1.0.0"
 description = "Federated Learning and Homomorphic Encryption"
 license = "Apache-2.0"
-dependencies = [
-    "flwr[simulation]>=1.15.1",
-    "flwr-datasets[vision]>=0.5.0",
-    "torch==2.5.1",
-    "torchvision==0.20.1",
-    "wandb==0.17.8",
-    "tomli>=2.0.1",
-]
+dependencies = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
@@ -28,16 +21,16 @@ serverapp = "server:app"
 clientapp = "client:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 2
+num-server-rounds = 10
 fraction-fit = 1
 fraction-evaluate = 0.5
 local-epochs = 1
 server-device = "cpu" # "cpu", "mps", "cuda" => mps mac M1
 use-wandb = false
-min-fit-clients = 2
-min-evaluate-clients = 2
-min-available-clients = 2
-number-clients = 2
+min-fit-clients = 10
+min-evaluate-clients = 10
+min-available-clients = 10
+number-clients = 10
 
 [tool.flwr.federations]
 default = "local-sim"
@@ -60,7 +53,7 @@ insecure = true
 [tool.federated_learning.nn]
 store-model = true # BEST-ONLY y ALL
 seed = 0
-max-epochs = 1
+max-epochs = 5
 batch-size = 32
 learning-rate = 0.001
 storage-model-path = './storage/models/'

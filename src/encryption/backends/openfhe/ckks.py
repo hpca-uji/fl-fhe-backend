@@ -4,7 +4,7 @@ from .common.enum.secret_key_dist import SecretKeyDist
 from .common.enum.scaling_technique import ScalingTechnique
 from .common.enum.security_level import SecurityLevel
 from .common.enum.pke_schema_feature import PKESchemaFeature
-from encryption.base import EncryptionBase
+from src.encryption.base import EncryptionBase
 
 class OpenFHECKKS(EncryptionBase):
   def __init__(self):

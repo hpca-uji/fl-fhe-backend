@@ -31,13 +31,6 @@ services:
     restart: always
     environment:
       - PYTHONUNBUFFERED=1
-    command:
-      [
-        "flower-supernode",
-        "--insecure",
-        "--superlink federated-server:9092",
-        '--node-config "partition-id=1 num-partitions=3"',
-      ]
     networks:
       - federated-network
 

@@ -1,20 +1,18 @@
-from encryption.factory import HomomorphicEncrytionFactory
+from src.encryption.factory import HomomorphicEncrytionFactory
 import numpy as np
-from core.util.common import read_file, write_file
-import tomli
-import os
-import tenseal as ts
 
 def main():
     he_backend = HomomorphicEncrytionFactory.get_backend(library='TENSEAL', schema='CKKS')
     he_backend.set_poly_modulus_degree(8192)
     he_backend.generate_keys()
     
+    # Vector encryption and decryption
     vector = np.array([1.5, 2.6, 3.8])
     encrypted_vector = he_backend.encrypt(vector)
     dencrypted_vector = he_backend.decrypt(encrypted_vector)
     print(dencrypted_vector)
 
+    # Matrix encryption and decryption
     matrix = np.matrix([[1.1, 2.2], [3.3, 4.4]])
     encrypted_matrix = he_backend.encrypt(matrix)
     dencrypted_matrix = he_backend.decrypt(encrypted_matrix)
@@ -23,7 +21,10 @@ def main():
     
     vector1 = np.array([1.5, 2.6, 3.8])
     vector2 = np.array([1.5, 2.6, 3.8])
+
+    print(he_backend.plain_tensor(vector1))
     
+    # Vector dot product
     encrypted_vector1 = he_backend.encrypt(vector1)
     encrypted_vector2 = he_backend.encrypt(vector2)
     dot_product = he_backend.enc_dot(encrypted_vector1, encrypted_vector2)
@@ -32,6 +33,7 @@ def main():
     matrix1 = np.matrix([[1.1, 2.2], [3.3, 4.4]])
     matrix2 = np.matrix([[1.1, 2.2], [3.3, 4.4]])
     
+    # Matrix dot product
     encrypted_matrix1 = he_backend.encrypt(matrix1)
     encrypted_matrix2 = he_backend.encrypt(matrix2)
     dot_matrix = he_backend.enc_dot(encrypted_matrix1, encrypted_matrix2)
@@ -42,6 +44,7 @@ def main():
     matrix = np.matrix([[1.1, 2.2], [3.3, 4.4]])
     vector = np.array([1.5, 2.6])
     
+    # Matrix multiplication
     plain_matrix = he_backend.plain_tensor(matrix)
     encrypted_vector = he_backend.encrypt(vector)
     matmul = he_backend.enc_matmul(encrypted_vector, plain_matrix)

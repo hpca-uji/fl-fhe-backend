@@ -79,10 +79,12 @@ def client_fn(context: Context):
     
     # Loading federated client
     fl_client = FederatedLearningFactory.get_backend('FLWR-CLIENT')
-    cl = fl_client.client(cid=1, net=net, trainloader=trainloader[1], valloader=valloader[1], 
-                            device=device, batch_size=nn["batch_size"], save_results=stats["enable"], 
-                            plot_path=stats["plots"], roc_path=stats["plots"], yaml_path=stats["reports"],
-                            he_enable=he["enable"], classes=test["classes"], context_client=context_client)
+    cl = fl_client.client(cid=int(context.node_config["partition-id"]), net=net, 
+                        trainloader=trainloader[int(context.node_config["partition-id"])], 
+                        valloader=valloader[int(context.node_config["partition-id"])], 
+                        device=device, batch_size=nn["batch_size"], save_results=stats["enable"], 
+                        plot_path=stats["plots"], roc_path=stats["plots"], yaml_path=stats["reports"],
+                        he_enable=he["enable"], classes=test["classes"], context_client=context_client)
     return cl.to_client()
 
 

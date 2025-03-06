@@ -1,5 +1,5 @@
-from core.util.check_value import check_value
-from encryption.base import EncryptionBase
+from src.core.util.check_value import check_value
+from src.encryption.base import EncryptionBase
 from Pyfhel import Pyfhel, PyCtxt
 import numpy as np
 
@@ -78,7 +78,7 @@ class PyFHELCKKS(EncryptionBase):
       if value.ndim == 1:
         enc_text = enc_text = np.array([self.he.encryptFrac(np.array([value[i]])) for i in range(value.shape[0])])
       elif value.ndim == 2:
-        matrix_size = value.shape
+        # matrix_size = value.shape
         enc_text = np.array([[self.he.encryptFrac(np.array([value[i, j]])) for j in range(value.shape[1])] for i in range(value.shape[0])])
     else:
       raise ValueError(f"Invalid value type: {type(value)}. Must be a numpy array, list, or numpy matrix.")
@@ -87,14 +87,15 @@ class PyFHELCKKS(EncryptionBase):
 
   def decrypt(self, value):
     if isinstance(value, PyCtxt):
-      dec_text = np.sum(self.he.decryptFrac(value))
+      return np.sum(self.he.decryptFrac(value))
     elif isinstance(value, (np.ndarray, list)):
       if value.ndim == 1:
-        dec_text = np.array([np.sum(self.he.decryptFrac(value[i])) for i in range(value.shape[0])])
+        return np.array([np.sum(self.he.decryptFrac(value[i])) for i in range(value.shape[0])])
+      else:
+        return np.array([[np.sum(self.he.decryptFrac(value[i, j])) for j in range(value.shape[1])] for i in range(value.shape[0])])
         ## dec_text = np.array([self.he.decryptFrac(value[i]) for i in range(value.shape[0])])
     else:
       raise ValueError(f"Invalid value type: {type(value)}. Must be a PyCtxt.")
-    return dec_text
 
   def enc_dot(self, term1, term2):
     if isinstance(term1, (PyCtxt, np.ndarray)) and isinstance(term2, (PyCtxt, np.ndarray)):
@@ -124,23 +125,22 @@ class PyFHELCKKS(EncryptionBase):
   def vec_matrix_dot(self, term1, term2):
     enc_result = [None for _ in range(term2.shape[1])]
     for i in range(term2.shape[1]):
-        for j in range(term1.shape[0]):
-          if j==0:
-            enc_result[i] = term1[j] * term2[j][i]
-          else:
-            enc_result[i] += term1[j] * term2[j][i]
-    return enc_result
+      for j in range(term1.shape[0]):
+        if j==0:
+          enc_result[i] = term1[j] * term2[j][i]
+        else:
+          enc_result[i] += term1[j] * term2[j][i]
+    return np.array(enc_result)
 
   def matrix_dot(self, term1, term2):
     enc_result = [[None for _ in range(term1.shape[1])] for _ in range(term1.shape[0])]
-
     for i in range(term1.shape[0]):
-        for j in range(term2.shape[1]):
-            enc_result[i][j] = term1[i][0] * term2[0][j]
-            for k in range(1, term1.shape[1]):
-                temp_mul = term1[i][k] * term2[k][j]
-                enc_result[i][j] += temp_mul
-    return enc_result
+      for j in range(term2.shape[1]):
+        enc_result[i][j] = term1[i][0] * term2[0][j]
+        for k in range(1, term1.shape[1]):
+          temp_mul = term1[i][k] * term2[k][j]
+          enc_result[i][j] += temp_mul
+    return np.array(enc_result)
 
   '''
   def sum_encrypted_values(self, ctxt: PyCtxt, size: int) -> PyCtxt:
@@ -173,9 +173,3 @@ class PyFHELCKKS(EncryptionBase):
 
   def enc_matmul(self, term1, term2):
     return self.enc_dot(term1, term2)
-
-  def serialize(self, value):
-    pass
-
-  def deserialize(self, value):
-    pass
