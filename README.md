@@ -63,6 +63,8 @@ flwr-clientapp --clientappio-api-address 127.0.0.1:<supernode-port> --insecure
 ### Run the simulation
 
 ```
+pip install -r requirements.txt
+pip install -e .
 flwr run
 ```
 
