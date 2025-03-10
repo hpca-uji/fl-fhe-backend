@@ -6,7 +6,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
   autoconf \
   clang \
-  libmop5 \
   libomp-dev \
   build-essential \
   libssl-dev \
@@ -16,11 +15,27 @@ RUN apt-get update && apt-get install -y \
   git \
   python3-dev \
   && rm -rf /var/lib/apt/lists/*
+
+# Clone openFHE repository
+RUN git clone https://github.com/openfheorg/openfhe-development.git
+
+# Build openFHE
+RUN mkdir /app/openfhe
+RUN cd /app/openfhe-development && mkdir build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/app/openfhe && make install
+
 # Copy the current directory contents into the container at /app
 COPY ../../. /app
 # Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir --timeout=1800 -r requirements.txt
+
+# Clone openFHE python wrapperrepository
+RUN git clone https://github.com/openfheorg/openfhe-python.git
+# Build pyfhe python package
+RUN cd /app/openfhe-python && mkdir build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/app/openfhe && make && make install
+RUN cp /app/openfhe-python/build/openfhe*.so /usr/local/lib/python3.10/site-packages/openfhe/openfhe.so
+RUN cp /app/openfhe/lib/lib* /usr/local/lib/python3.10/site-packages/openfhe/lib/
+
 # Make port 9094 available for clients connection
 EXPOSE 9094
 # Define environment variable for Python

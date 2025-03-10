@@ -51,9 +51,10 @@ def server_fn(context: Context):
     stats = config.get_stats_config()
     quantum = config.get_quantum_config()
     
+    # Set the device
     device = torch.device(server_device)
     
-    # Client ID
+    # Load the test dataset
     _, _, testloader = load_datasets(1, test["batch_size"], test["resize"], test["seed"], test["num_workers"], 
                                      test["splitter"], test["dataset"], test["data_path"], test["validation_data"], 
                                      test["normalization"]["mean"], test["normalization"]["std"])
@@ -86,6 +87,7 @@ def server_fn(context: Context):
         
         # he_backend.set_context(server_context)
     
+    # Load the central model
     central = Net(num_classes=len(test["classes"]), 
                   num_layers=quantum["num_layers"], 
                   num_qubits=quantum["num_qubits"]).to(device)
@@ -93,6 +95,7 @@ def server_fn(context: Context):
     # Loading federated client
     fl_server = FederatedLearningFactory.get_backend('FLWR-SERVER')
     
+    # Set the strategy
     strategy = fl_server.server(func=FedCustom, fraction_fit=fraction_fit,
         fraction_evaluate=fraction_eval,
         min_fit_clients=min_fit_clients,

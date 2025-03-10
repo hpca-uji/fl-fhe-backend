@@ -1,5 +1,5 @@
 from .backends.tenseal.ckks import TensealCKKS
-# from .backends.openfhe.ckks import OpenFHECKKS
+from .backends.openfhe.ckks import OpenFHECKKS
 from .backends.pyfhel.ckks import PyFHELCKKS
 
 
@@ -19,5 +19,5 @@ class HomomorphicEncrytionFactory:
     
 # Register supported libraries and schemas
 HomomorphicEncrytionFactory.register_backend(library='TENSEAL', schema='CKKS', backend_class=TensealCKKS)
-# HomomorphicEncrytionFactory.register_backend(library='OPENFHE', schema='CKKS', backend_class=OpenFHECKKS)
+HomomorphicEncrytionFactory.register_backend(library='OPENFHE', schema='CKKS', backend_class=OpenFHECKKS)
 HomomorphicEncrytionFactory.register_backend(library='PYFHEL', schema='CKKS', backend_class=PyFHELCKKS)
