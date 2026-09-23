@@ -1,5 +1,5 @@
 from src.nn.layers.layer import Layer
-import tenseal as ts
+from src.encryption.factory import HomomorphicEncrytionFactory
 
 
 class EncryptedLayer(Layer):
@@ -8,17 +8,20 @@ class EncryptedLayer(Layer):
 
     :param name_layer: the name of the layer
     :param weight: the crypted weights of the layer
-    :param contexte: the context of the encryption
+    :param he_backend: the homomorphic encryption backend
     """
-    def __init__(self, name_layer, weight, context=None):
+    def __init__(self, name_layer, weight, he_backend=None):
         super(EncryptedLayer, self).__init__(name_layer, weight)
-        if type(weight) == ts.tensors.CKKSTensor or type(weight) == bytes:
+        self.he_backend = he_backend
+        if type(weight) == bytes or hasattr(weight, 'decrypt') or hasattr(weight, 'serialize'):
             # If the weights are already encrypted or if they are bytes (serialized weights)
             self.weight_array = weight
 
         else:
-            # If the weights are not encrypted, we encrypt them with the context
-            self.weight_array = ts.ckks_tensor(context, weight.cpu().detach().numpy())
+            # If the weights are not encrypted, we encrypt them with the backend
+            if hasattr(weight, 'cpu'):
+                weight = weight.cpu().detach().numpy()
+            self.weight_array = self.he_backend.encrypt(weight)
 
     def __add__(self, other):
         """
@@ -29,7 +32,11 @@ class EncryptedLayer(Layer):
         :return: the addition result in the form of a crypted layer object
         """
         weights = other.get_weight() if type(other) == EncryptedLayer else other
-        return EncryptedLayer(self.name, self.weight_array + weights)
+        if self.he_backend and hasattr(self.he_backend, 'enc_add'):
+            res = self.he_backend.enc_add(self.weight_array, weights)
+        else:
+            res = self.weight_array + weights
+        return EncryptedLayer(self.name, res, self.he_backend)
 
     def __sub__(self, other):
         """
@@ -40,7 +47,7 @@ class EncryptedLayer(Layer):
         :return: the substraction result in the form of a crypted layer object
         """
         weights = other.get_weight() if type(other) == EncryptedLayer else other
-        return EncryptedLayer(self.name, self.weight_array - weights)
+        return EncryptedLayer(self.name, self.weight_array - weights, self.he_backend)
 
     def __mul__(self, other):
         """
@@ -51,7 +58,11 @@ class EncryptedLayer(Layer):
         :return: the multiplication result in the form of a crypted layer object
         """
         weights = other.get_weight() if type(other) == EncryptedLayer else other
-        return EncryptedLayer(self.name, self.weight_array * weights)
+        if self.he_backend and hasattr(self.he_backend, 'enc_mul'):
+            res = self.he_backend.enc_mul(self.weight_array, weights)
+        else:
+            res = self.weight_array * weights
+        return EncryptedLayer(self.name, res, self.he_backend)
 
     def __truediv__(self, other):
         """
@@ -68,10 +79,10 @@ class EncryptedLayer(Layer):
             weights = self.weight_array * (1 / weights)
 
         except:
-            print("Error: the division operator isn't supported by SEAL")
+            print("Error: the division operator isn't supported by the backend")
             weights = []
 
-        return EncryptedLayer(self.name, weights)
+        return EncryptedLayer(self.name, weights, self.he_backend)
 
     def shape(self):
         """
@@ -89,7 +100,7 @@ class EncryptedLayer(Layer):
 
         :return: the sum of the weights of the layer in the form of a crypted layer object
         """
-        return EncryptedLayer(f"sum_{self.name}", self.weight_array.sum(axis=axis))
+        return EncryptedLayer(f"sum_{self.name}", self.weight_array.sum(axis=axis), self.he_backend)
 
     def mean(self, axis=0):
         """
@@ -100,7 +111,7 @@ class EncryptedLayer(Layer):
         :return: the average of the weights of the layer in the form of a crypted layer object
         """
         weights = self.weight_array.sum(axis=axis) * (1 / self.weight_array.shape[axis])
-        return EncryptedLayer(f"sum_{self.name}", weights)
+        return EncryptedLayer(f"sum_{self.name}", weights, self.he_backend)
 
     def decrypt(self, sk=None):
         """
@@ -110,6 +121,9 @@ class EncryptedLayer(Layer):
 
         :return: the decrypted weights of the layer in the form of a list of weights
         """
+        if self.he_backend and hasattr(self.he_backend, 'decrypt'):
+            decrypted = self.he_backend.decrypt(self.weight_array, sk=sk)
+            return decrypted.tolist() if hasattr(decrypted, 'tolist') else decrypted
         return self.weight_array.decrypt(sk).tolist() if sk else self.weight_array.decrypt().tolist()
 
     def serialize(self):
@@ -120,11 +134,11 @@ class EncryptedLayer(Layer):
         """
         return {self.name: self.weight_array.serialize()}
     
-def encrypt_weights(weights, enc_context):
+def encrypt_weights(weights, he_backend):
     encrypted = []
     for name_layer, weight_array in weights.items():
         if name_layer == 'fc3.weight':
-            encrypted.append(EncryptedLayer(name_layer, weight_array, enc_context))
+            encrypted.append(EncryptedLayer(name_layer, weight_array, he_backend))
         else:
             encrypted.append(Layer(name_layer, weight_array))
     return encrypted

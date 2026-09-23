@@ -4,6 +4,12 @@ class LoadConfig:
   def __init__(self, config_file) -> None:
     with open(config_file, "rb") as f:
       self.config = tomli.load(f)
+      
+  def get_app_config(self):
+    root = self.config["tool"]["flwr"]["app"]["config"]
+    return {
+      "client" : root["client"],
+    }
     
   def get_he_config(self):
     root = self.config["tool"]["federated_learning"]["he"]
@@ -28,6 +34,7 @@ class LoadConfig:
   def get_nn_config(self):
     root = self.config["tool"]["federated_learning"]["nn"]
     return {
+      "model" : root["model"],
       "store_model" : root["store-model"],
       "seed" : root["seed"],
       "max_epochs" : root["max-epochs"],
@@ -42,6 +49,7 @@ class LoadConfig:
     root = self.config["tool"]["federated_learning"]["test"]["dataset"]
     return {
       "dataset" : root["dataset"],
+      "test_dataset" : root["test-dataset"],
       "splitter" : root["splitter"],
       "num_clients" : root["num-clients"],
       "num_workers" : root["num-workers"],

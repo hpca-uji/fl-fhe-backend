@@ -4,7 +4,10 @@ from src.nn.engine.train import train
 from flwr.client import NumPyClient
 from example.models.custom_model import Net
 from src.core.util.common import check_directory
+from src.core.util.fhe_metrics import log_client_fhe_metrics, calculate_weights_size
 from datetime import datetime
+import time
+import gc
 
 class FlowerClient(NumPyClient):
     def __init__(self, 
@@ -48,25 +51,56 @@ class FlowerClient(NumPyClient):
 
         print(f'[Client {self.cid}, round {server_round}] fit, config: {config}')
 
+        # Measure decryption time of received parameters
+        t0_dec = time.perf_counter()
         set_parameters(self.net, parameters, self.context_client)
+        decryption_time = time.perf_counter() - t0_dec
 
-        criterion = torch.nn.CrossEntropyLoss()
+        criterion = torch.nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
 
         results = train(self.net, self.trainloader, self.valloader, optimizer=optimizer, loss_fn=criterion,
-                               epochs=local_epochs, device=self.device)
+                               epochs=local_epochs, device=self.device, server_round=server_round, client_id=str(self.cid))
 
         if self.save_results:
             save_graphs(self.plot_path, local_epochs, results, f"_Client {self.cid}")
 
-        return get_parameters2(self.net, self.context_client), len(self.trainloader), {}
+        # Measure encryption time of trained parameters
+        t0_enc = time.perf_counter()
+        parameters_res = get_parameters2(self.net, self.context_client)
+        encryption_time = time.perf_counter() - t0_enc
+        
+        # Calculate size of weights to be transmitted to the server
+        weights_size_bytes, weights_size_kb, weights_size_mb = calculate_weights_size(parameters_res)
+        keygen_time = getattr(self.context_client, "keygen_time", 0.0) if self.context_client else 0.0
+
+        # Log metrics to CSV
+        log_client_fhe_metrics(
+            client_id=self.cid,
+            server_round=server_round,
+            decryption_time_sec=decryption_time if self.he else 0.0,
+            encryption_time_sec=encryption_time if self.he else 0.0,
+            weights_size_bytes=weights_size_bytes,
+            keygen_time_sec=keygen_time
+        )
+        print(f"[Client {self.cid}, round {server_round}] Decryption: {decryption_time:.4f}s | Encryption: {encryption_time:.4f}s | Weights size: {weights_size_mb:.2f} MB ({weights_size_bytes} bytes)")
+
+        gc.collect()
+        metrics = {
+            "decryption_time": decryption_time if self.he else 0.0,
+            "encryption_time": encryption_time if self.he else 0.0,
+            "weights_size_bytes": weights_size_bytes,
+            "weights_size_mb": weights_size_mb,
+            "keygen_time": keygen_time
+        }
+        return parameters_res, len(self.trainloader), metrics
 
     def evaluate(self, parameters, config):
         print(f"[Client {self.cid}] evaluate, config: {config}")
         set_parameters(self.net, parameters, self.context_client)
 
         loss, accuracy, y_pred, y_true, y_proba = test(self.net, self.valloader,
-                                                              loss_fn=torch.nn.CrossEntropyLoss(), device=self.device)
+                                                              loss_fn=torch.nn.BCEWithLogitsLoss(), device=self.device)
 
         if self.save_results:
             current_date = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -78,6 +112,7 @@ class FlowerClient(NumPyClient):
             if self.roc_path:
                 roc_filename = os.path.join(self.roc_path, "roc")
                 check_directory(roc_filename)
-                save_roc(y_true, y_proba, os.path.join(roc_filename, filename ), len(self.classes))
+                # save_roc(y_true, y_proba, os.path.join(roc_filename, filename ), len(self.classes))
 
+        gc.collect()
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}

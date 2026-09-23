@@ -7,11 +7,13 @@ from flwr.common import (
 )
 from flwr.server.strategy.aggregate import weighted_loss_avg
 from logging import WARNING
+import time
 from src.core.util.mapper import *
 import flwr as fl
 
 from src.nn.layers.layer_util import aggregate_custom
 from src.federated_learning.federation.aggregate import aggregate
+from src.core.util.fhe_metrics import log_server_fhe_metrics
 
 
 class FedCustom(fl.server.strategy.Strategy):
@@ -116,14 +118,48 @@ class FedCustom(fl.server.strategy.Strategy):
         if not self.accept_failures and failures:
             return None, {}
 
+        # Measure total aggregation time
+        t_start_agg = time.perf_counter()
+
+        # Calculate received weights size from all clients
+        total_received_bytes = 0
+        for _, fit_res in results:
+            if fit_res.parameters and hasattr(fit_res.parameters, "tensors"):
+                total_received_bytes += sum(len(t) for t in fit_res.parameters.tensors)
+
         # Convert results parameters --> array matrix
-        weights_results = [
-            (parameters_to_ndarrays_custom(fit_res.parameters, self.context_server), fit_res.num_examples)
-            for _, fit_res in results
-        ]
+        weights_results = []
+        for _, fit_res in results:
+            ndarrays = parameters_to_ndarrays_custom(fit_res.parameters)
+            # Deserialize the received bytes into FHE ciphertexts
+            if self.context_server and hasattr(self.context_server, "deserialize"):
+                ndarrays = [self.context_server.deserialize(layer) for layer in ndarrays]
+            weights_results.append((ndarrays, fit_res.num_examples))
 
         # Aggregate parameters using weighted average between the clients and convert back to parameters object (bytes)
-        parameters_aggregated = ndarrays_to_parameters_custom(aggregate_custom(weights_results))
+        aggregated_ndarrays, fhe_timing = aggregate_custom(weights_results, he_backend=self.context_server, return_timing=True)
+        
+        # Serialize the aggregated FHE ciphertexts back into bytes
+        if self.context_server and hasattr(self.context_server, "serialize"):
+            serialized_ndarrays = [self.context_server.serialize(layer) for layer in aggregated_ndarrays]
+        else:
+            serialized_ndarrays = aggregated_ndarrays
+            
+        parameters_aggregated = ndarrays_to_parameters_custom(serialized_ndarrays)
+        total_aggregation_time = time.perf_counter() - t_start_agg
+
+        # Log server-side metrics to CSV
+        keygen_time = getattr(self.context_server, "keygen_time", 0.0) if self.context_server else 0.0
+        log_server_fhe_metrics(
+            server_round=server_round,
+            homomorphic_addition_time_sec=fhe_timing.get("homomorphic_addition_time", 0.0),
+            homomorphic_mult_time_sec=fhe_timing.get("homomorphic_mult_time", 0.0),
+            total_aggregation_time_sec=total_aggregation_time,
+            received_weights_size_bytes=total_received_bytes,
+            num_clients=len(results),
+            keygen_time_sec=keygen_time
+        )
+        print(f"[Server Round {server_round}] Homomorphic addition: {fhe_timing.get('homomorphic_addition_time', 0.0):.4f}s | Total Aggregation: {total_aggregation_time:.4f}s | Received weights: {total_received_bytes / (1024*1024):.2f} MB")
 
         metrics_aggregated = {}
         # Aggregate custom metrics if aggregation fn was provided
@@ -219,7 +255,7 @@ class FedCustom(fl.server.strategy.Strategy):
             return None
 
         # if we have a global model evaluation on the server side :
-        parameters_ndarrays = parameters_to_ndarrays_custom(parameters, self.context_server)
+        parameters_ndarrays = parameters_to_ndarrays_custom(parameters)
         eval_res = self.evaluate_fn(server_round=server_round, parameters=parameters_ndarrays, 
                                     config={}, testloader=self.test_loader, 
                                     device=self.device, model_init=self.central_model)

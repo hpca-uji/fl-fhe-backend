@@ -3,67 +3,47 @@ import torch
 import numpy as np
 import tqdm
 
-def test(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, loss_fn: Union[torch.nn.Module, Tuple],
-         device: torch.device):
-    """Tests a PyTorch model for a single epoch.
-
-    Turns a target PyTorch model to "eval" mode and then performs
-    a forward pass on a testing dataset.
-
-    Args:
-    model: A PyTorch model to be tested.
-    dataloader: A DataLoader instance for the model to be tested on.
-    loss_fn: A PyTorch loss function to calculate loss on the test data.
-    device: A target device to compute on (e.g. "cuda" or "cpu").
-
-    Returns:
-    A tuple of testing loss and testing accuracy metrics.
-    In the form (test_loss, test_accuracy). For example:
-
-    (0.0223, 0.8985)
-    """
-    # Put model in eval mode
+def test(model, dataloader, loss_fn, device):
     model.eval()
+    test_loss = 0
+    
+    # 1. Initialize lists to hold TENSORS for every batch
+    all_logits = []
+    all_labels = []
+    activation = torch.nn.Sigmoid() 
 
-    # Setup test loss and test accuracy values
-    test_loss, test_acc = 0, 0
-    y_pred = []
-    y_true = []
-    y_proba = []
-    softmax = torch.nn.Softmax(dim=1)
-
-    # Turn on inference context manager
-    with torch.inference_mode():
-        """
-        torch.inference_mode is analogous to torch.no_grad : 
-        gets better performance by disabling view tracking and version counter bumps
-        """
-        # Loop through DataLoader batches
+    with torch.no_grad():
         for images, labels in dataloader:
-            # Send data to target device
             images, labels = images.to(device), labels.to(device)
-
-            # 1. Forward pass
             output = model(images)
 
-            # 2. Calculate and accumulate probas
-            probas_output = softmax(output)
-            y_proba.extend(probas_output.detach().cpu().numpy())
+            # Fix class mismatch (ensure columns match)
+            num_classes = min(output.shape[1], labels.shape[1])
+            output = output[:, :num_classes]
+            labels = labels[:, :num_classes]
 
-            # 3. Calculate and accumulate loss
             loss = loss_fn(output, labels)
             test_loss += loss.item()
 
-            # 4. Calculate and accumulate accuracy
-            labels = labels.data.cpu().numpy()
-            y_true.extend(labels)  # Save Truth
-            preds = np.argmax(output.detach().cpu().numpy(), axis=1)
-            y_pred.extend(preds)  # Save Prediction
-            acc = (preds == labels).mean()
-            test_acc += acc
+            # 2. DETACH and store tensors (append to list)
+            all_logits.append(output.detach().cpu())
+            all_labels.append(labels.detach().cpu())
 
-    y_proba = np.array(y_proba)
-    # Adjust metrics to get average loss and accuracy per batch
-    test_loss = test_loss / len(dataloader)
-    test_acc = test_acc / len(dataloader)
-    return test_loss, test_acc * 100, y_pred, y_true, y_proba
+    # 3. CRITICAL: CONCATENATE ALL BATCHES AFTER THE LOOP
+    # This turns your batches into one single tensor of 611 rows
+    full_logits = torch.cat(all_logits, dim=0)
+    full_labels = torch.cat(all_labels, dim=0)
+
+    # 4. Convert to numpy ONCE after everything is aligned
+    y_proba = activation(full_logits).numpy()
+    y_true = full_labels.numpy()
+    y_pred = (y_proba > 0.5).astype(float)
+
+    # Metrics
+    test_acc = (y_pred == y_true).mean() * 100
+    test_loss /= len(dataloader)
+    
+    # This should now show (611, 25) (611, 25) in your terminal
+    print(f"Shapes aligned: y_true={y_true.shape}, y_proba={y_proba.shape}")
+    
+    return test_loss, test_acc, y_pred, y_true, y_proba

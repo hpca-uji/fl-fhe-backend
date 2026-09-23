@@ -10,9 +10,10 @@ def aggregate(server_round, aggregated_parameters, central_model, checkpoint=Non
               context_client=None, context_server=None, server_path=None):
     if aggregated_parameters is not None:
         print(f"Saving round {server_round} aggregated_parameters...")
-        aggregated_ndarrays: List[np.ndarray] = parameters_to_ndarrays_custom(aggregated_parameters, context_server)
-        if context_client:
-            server_response = {"contexte": context_server.serialize()}
+        aggregated_ndarrays: List[np.ndarray] = parameters_to_ndarrays_custom(aggregated_parameters)
+        if context_client or context_server:
+            context = context_server if context_server else context_client
+            server_response = {"context": context.get_context()}
             for i, key in enumerate(central_model.state_dict().keys()):
                 try:
                     server_response[key] = aggregated_ndarrays[i].serialize()

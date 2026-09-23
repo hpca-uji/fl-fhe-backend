@@ -1,3 +1,7 @@
+<div align="center">
+<img src="images/CIBER-CAFE_logo.jpeg" alt="" width="100"/>
+</div>
+
 # CIBER-CAFE
 
 Research project entitled "CIBERseguridad post-Cuántica para el Aprendizaje FEderado en procesadores de bajo consumo y aceleradores" (Post-Quantum Cybersecurity for FEderated Learning on Low-Power Processors and Accelerators).
@@ -54,11 +58,7 @@ flwr run . local-deployment --stream
 The supernode facilitates communication between clients and the federated learning server. If it is running locally `--clientappio-api-address 127.0.0.1:9095` and change the port, otherwise remove the line.
 
 ````
-flower-supernode \
-     --insecure \
-     --superlink 127.0.0.1:9092 \
-     --clientappio-api-address 127.0.0.1:9095 \ 
-     --node-config "partition-id=1 num-partitions=2"
+flower-supernode --insecure --superlink 127.0.0.1:9092 --clientappio-api-address 127.0.0.1:9095 --node-config "partition-id=1 num-partitions=2"
 ````
 
 #### Run the ClientApp
@@ -111,3 +111,5 @@ The library has been partially supported by:
 ![](footer.jpg)
 
 **Project website:** https://sites.google.com/uji.es/ciber-cafe/home
+
+![Alt text](images/BandaLogos_INCIBE_es.jpg)

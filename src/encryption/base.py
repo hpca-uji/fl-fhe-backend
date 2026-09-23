@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
 
 class EncryptionBase(ABC):
-    
+    def __init__(self):
+        self.keygen_time = 0.0
+
+    def get_keygen_time(self) -> float:
+        return self.keygen_time
+
     @abstractmethod
     def get_context(self):
         pass
@@ -36,5 +41,9 @@ class EncryptionBase(ABC):
     
     @abstractmethod
     def enc_matmul(self, term1, term2, **kwargs):
+        pass
+    
+    @abstractmethod
+    def enc_mul(self, term1, term2, **kwargs):
         pass
     

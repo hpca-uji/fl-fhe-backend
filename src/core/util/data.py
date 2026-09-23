@@ -3,8 +3,6 @@ from torch.utils.data import DataLoader, random_split
 from .common import *
 import torch
 
-NUM_WORKERS = os.cpu_count()
-
 def split_data_client(dataset, num_clients, seed):
     partition_size = len(dataset) // num_clients
     lengths = [partition_size] * (num_clients - 1)
@@ -13,7 +11,7 @@ def split_data_client(dataset, num_clients, seed):
     return ds
 
 
-def load_datasets(num_clients: int, batch_size: int, resize: int, seed: int, num_workers: int, splitter=10,
+def load_datasets(num_clients: int, batch_size: int, resize: int, seed: int, splitter=10,
                   dataset="CIFAR", data_path="./data/", validation_data=False, mean=None, std=None):
     list_transforms = [transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)]
 
@@ -30,9 +28,7 @@ def load_datasets(num_clients: int, batch_size: int, resize: int, seed: int, num
 
         transformer = transforms.Compose(list_transforms)
         trainset = datasets.ImageFolder(data_path + dataset + "/Training", transform=transformer)
-        testset = datasets.ImageFolder(data_path + dataset + "/Testing", transform=transformer)
-    
-    print(f"The training set is created for the classes : {trainset.classes}")        
+        testset = datasets.ImageFolder(data_path + dataset + "/Testing", transform=transformer)      
 
     # Split training set into `num_clients` partitions to simulate different local datasets
     datasets_train = split_data_client(trainset, num_clients, seed)

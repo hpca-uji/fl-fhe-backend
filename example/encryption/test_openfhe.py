@@ -2,12 +2,9 @@ from src.encryption.factory import HomomorphicEncrytionFactory
 import numpy as np
 
 def main():
-    he_backend = HomomorphicEncrytionFactory.get_backend(library='PYFHEL', schema='CKKS')
-    he_backend.set_global_scale(2**30)
-    he_backend.set_poly_modulus_degree(2**14)
-    he_backend.set_coef_mod_bit([60, 30, 30, 30, 60] )
-    he_backend.generate_keys()
+    he_backend = HomomorphicEncrytionFactory.get_backend(library='OPENFHE', schema='CKKS')
     he_backend.create_context()
+    he_backend.generate_keys()
     
     # Vector encryption and decryption
     vector = np.array([1.5, 2.6, 3.8])
@@ -15,8 +12,7 @@ def main():
     dencrypted_vector = he_backend.decrypt(encrypted_vector)
     print(dencrypted_vector)
 
-
-    # Matrix
+    # Matrix encryption and decryption
     matrix = np.matrix([[1.1, 2.2], [3.3, 4.4]])
     encrypted_matrix = he_backend.encrypt(matrix)
     dencrypted_matrix = he_backend.decrypt(encrypted_matrix)
@@ -25,6 +21,8 @@ def main():
     
     vector1 = np.array([1.5, 2.6, 3.8])
     vector2 = np.array([1.5, 2.6, 3.8])
+
+    print(he_backend.plain_tensor(vector1))
     
     # Vector dot product
     encrypted_vector1 = he_backend.encrypt(vector1)
@@ -41,6 +39,17 @@ def main():
     dot_matrix = he_backend.enc_dot(encrypted_matrix1, encrypted_matrix2)
     dencrypted_dot_matrix = he_backend.decrypt(dot_matrix)
     print(dencrypted_dot_matrix)
+    
+    
+    matrix = np.matrix([[1.1, 2.2], [3.3, 4.4]])
+    vector = np.array([1.5, 2.6])
+    
+    # Matrix multiplication
+    plain_matrix = he_backend.plain_tensor(matrix)
+    encrypted_vector = he_backend.encrypt(vector)
+    matmul = he_backend.enc_matmul(encrypted_vector, plain_matrix)
+    dencrypted_matmul = he_backend.decrypt(matmul)
+    print(dencrypted_matmul)
     
     
 if __name__ == '__main__':

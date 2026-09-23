@@ -8,8 +8,6 @@ import seaborn as sn
 from sklearn.metrics import confusion_matrix, roc_curve, auc
 from .error import ErrorHandler
 from typing import OrderedDict, List
-from src.nn.layers.encrypted_layer import encrypt_weights
-from src.nn.layers.layer_util import deserialized_model, deserialized_layer
 
 
 def choice_device(device):
@@ -52,9 +50,9 @@ def read_file(file_path):
     if os.path.exists(file_path):
         with open(file_path, 'rb') as file:
             query_str = pickle.load(file)
-        contexte = query_str["contexte"]
-        del query_str["contexte"]
-        return query_str, contexte
+        context = query_str["context"]
+        del query_str["context"]
+        return query_str, context
 
     else:
         raise ErrorHandler("File not found", 0)
@@ -69,14 +67,21 @@ def write_file(file_path, client_query):
 
 def save_matrix(y_true, y_pred, path, classes):
     check_directory(path)
-    y_true_mapped = [classes[label] for label in y_true]
-    y_pred_mapped = [classes[label] for label in y_pred]
     
-    cf_matrix_normalized = confusion_matrix(y_true_mapped, y_pred_mapped, labels=classes, normalize='all')
-   
+    # Ensure inputs are numpy arrays and FLATTENED
+    if hasattr(y_true, "numpy"): # Handle Torch Tensors
+        y_true = y_true.detach().cpu().numpy()
+    if hasattr(y_pred, "numpy"):
+        y_pred = y_pred.detach().cpu().numpy()
+
+    # For Multi-label, collapse to a binary 2x2 matrix (True/False Positives/Negatives across all labels)
+    y_true_flat = np.asarray(y_true).ravel()
+    y_pred_flat = (np.asarray(y_pred) > 0.5).astype(int).ravel() # Ensure predictions are binary
+    
+    cf_matrix_normalized = confusion_matrix(y_true_flat, y_pred_flat, normalize='all')
     cf_matrix_round = np.round(cf_matrix_normalized, 2)
 
-    df_cm = pd.DataFrame(cf_matrix_round, index=[i for i in classes], columns=[i for i in classes])
+    df_cm = pd.DataFrame(cf_matrix_round, index=["Negative", "Positive"], columns=["Negative", "Positive"])
     plt.figure(figsize=(12, 7))
     sn.heatmap(df_cm, annot=True)
     plt.xlabel("Predicted label", fontsize=13)
@@ -88,14 +93,20 @@ def save_matrix(y_true, y_pred, path, classes):
 
 def save_roc(targets, y_proba, path, num_classes):
     check_directory(path)
-    y_true = np.zeros(shape=(len(targets), num_classes))  # array-like of shape (n_samples, n_classes)
-    for i in range(len(targets)):
-        y_true[i, targets[i]] = 1
+    
+    if torch.is_tensor(targets):
+        targets = targets.detach().cpu().numpy()
+    else:
+        targets = np.asarray(targets)
+    y_true = targets.astype(int) # targets is already shape (Batch, num_classes)
+    
+    if torch.is_tensor(y_proba):
+        y_proba = y_proba.detach().cpu().numpy()
 
-    # Compute ROC curve and ROC area for each class
     fpr = dict()
     tpr = dict()
     roc_auc = dict()
+    
     for i in range(num_classes):
         fpr[i], tpr[i], _ = roc_curve(y_true[:, i], y_proba[:, i])
         roc_auc[i] = auc(fpr[i], tpr[i])
@@ -200,15 +211,21 @@ def get_parameters2(net, context_client=None) -> List[np.ndarray]:
     """
     Get the parameters of the network
     :param net: network to get the parameters (weights and biases)
-    :param context_client: context of the crypted weights (if None, return the clear weights)
+    :param context_client: FHE backend instance (if None, return the clear weights)
     :return: list of parameters (weights and biases) of the network
     """
     if context_client:
-        # Crypte of the model trained at the client for a given round (after each round the model is aggregated between
-        # clients)
-        encrypted_tensor = encrypt_weights(net.state_dict(), context_client)  # list of encrypted layers (weights and biases)
-
-        return [layer.get_weight() for layer in encrypted_tensor]
+        he_backend = context_client
+        encrypted = []
+        for _, val in net.state_dict().items():
+            enc_val = he_backend.encrypt(val.cpu().numpy())
+            if hasattr(he_backend, "serialize"):
+                enc_val = he_backend.serialize(enc_val)
+            encrypted.append(enc_val)
+            
+            # Aggressively collect garbage to free intermediate FHE objects layer-by-layer
+            import gc; gc.collect()
+        return encrypted
 
     return [val.cpu().numpy() for _, val in net.state_dict().items()]
 
@@ -219,18 +236,44 @@ def set_parameters(net, parameters: List[np.ndarray], context_client=None):
     :param parameters: list of parameters (weights and biases) to set
     :param context_client: context of the crypted weights (if None, set the clear weights)
     """
-    params_dict = zip(net.state_dict().keys(), parameters)
     if context_client:
-        secret_key = context_client.secret_key()
-        dico = {k: deserialized_layer(k, v, context_client) for k, v in params_dict}
-
-        state_dict = OrderedDict(
-            {k: torch.Tensor(v.decrypt(secret_key)) for k, v in dico.items()}
-        )
-
+        he_backend = context_client
+        state_dict = OrderedDict()
+        keys = list(net.state_dict().keys())
+        for i in range(len(keys)):
+            k = keys[i]
+            v = parameters[i]
+            # Release original reference to free memory early
+            parameters[i] = None
+            
+            # Flower may restore a single byte object as a 0-D numpy array
+            if isinstance(v, np.ndarray) and v.ndim == 0:
+                v = v.item()
+                
+            # If the parameter is an unencrypted numpy array of numbers, skip decryption
+            if isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.number):
+                dec = v
+            elif isinstance(v, (int, float, np.number)):
+                dec = v
+            else:
+                if hasattr(he_backend, "deserialize"):
+                    v = he_backend.deserialize(v)
+                dec = he_backend.decrypt(v)
+            
+            # Get target shape from the network state dict
+            target_shape = net.state_dict()[k].shape
+            num_elements = int(np.prod(target_shape))
+            
+            # Reshape the flattened decrypted array, truncating any padding elements
+            dec_reshaped = np.array(dec).flatten()[:num_elements].reshape(target_shape)
+            state_dict[k] = torch.tensor(dec_reshaped, dtype=net.state_dict()[k].dtype)
+            
+            # Force GC per layer to keep memory footprint extremely flat
+            import gc; gc.collect()
     else:
-        dico = {k: torch.Tensor(v) for k, v in params_dict}
-        state_dict = OrderedDict(dico)
+        state_dict = OrderedDict()
+        for k, v in zip(net.state_dict().keys(), parameters):
+            state_dict[k] = torch.tensor(v, dtype=net.state_dict()[k].dtype)
 
     net.load_state_dict(state_dict, strict=True)
     print("Updated model")
