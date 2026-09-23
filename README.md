@@ -108,8 +108,6 @@ The library has been partially supported by:
 
 - Project C121/23 Convenio "CIBERseguridad post-Cuántica para el Aprendizaje FEderado en procesadores de bajo consumo y aceleradores (CIBER-CAFE)" funded by the Spanish National Cybersecurity Institute (INCIBE).
 
-![](footer.jpg)
-
 **Project website:** https://sites.google.com/uji.es/ciber-cafe/home
 
 ![Alt text](images/BandaLogos_INCIBE_es.jpg)
